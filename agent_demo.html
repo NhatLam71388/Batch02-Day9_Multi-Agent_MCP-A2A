@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Agent A2A Demo — Day 9</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2d3e;
+      --accent: #6366f1;
+      --accent2: #22d3ee;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    header .logo { font-size: 28px; }
+    header h1 { font-size: 20px; font-weight: 700; }
+    header p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex; gap: 4px;
+      padding: 16px 32px 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+    }
+    .tab {
+      padding: 10px 20px; border-radius: 8px 8px 0 0;
+      cursor: pointer; font-size: 14px; font-weight: 500;
+      color: var(--muted); border: 1px solid transparent;
+      border-bottom: none; transition: all .2s;
+    }
+    .tab:hover { color: var(--text); background: var(--bg); }
+    .tab.active {
+      color: var(--accent); background: var(--bg);
+      border-color: var(--border);
+    }
+    .panel { display: none; padding: 32px; }
+    .panel.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px; margin-bottom: 24px;
+    }
+    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px; }
+
+    /* ── Stage 4 Graph ── */
+    .graph-wrap { overflow-x: auto; }
+    svg.graph { display: block; margin: 0 auto; }
+
+    /* ── Step-by-step animation ── */
+    .steps { display: flex; flex-direction: column; gap: 10px; }
+    .step {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 14px 16px; border-radius: 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      opacity: .35; transform: translateX(-8px);
+      transition: opacity .4s, transform .4s, border-color .4s;
+    }
+    .step.active { opacity: 1; transform: translateX(0); border-color: var(--accent); }
+    .step.done   { opacity: .75; transform: translateX(0); border-color: var(--green); }
+    .step-icon { font-size: 20px; margin-top: 1px; flex-shrink: 0; }
+    .step-body h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .step-body p  { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 99px;
+      font-size: 11px; font-weight: 600; margin-right: 4px;
+    }
+    .tag-blue   { background: #1e3a5f; color: var(--accent2); }
+    .tag-purple { background: #2d1b69; color: #a78bfa; }
+    .tag-green  { background: #064e3b; color: var(--green); }
+    .tag-yellow { background: #451a03; color: var(--yellow); }
+    .tag-red    { background: #450a0a; color: var(--red); }
+
+    /* controls */
+    .ctrl { display: flex; gap: 10px; margin-bottom: 20px; }
+    button {
+      padding: 9px 20px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: opacity .2s;
+    }
+    button:hover { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-success { background: var(--green); color: #fff; }
+
+    /* ── A2A Flow (Stage 5) ── */
+    .flow-container {
+      position: relative; min-height: 520px;
+    }
+    .agents-row {
+      display: flex; justify-content: space-around; align-items: flex-start;
+      flex-wrap: wrap; gap: 16px; padding: 20px 0;
+    }
+    .agent-box {
+      width: 140px; text-align: center;
+      opacity: .5; transition: opacity .4s, transform .3s;
+    }
+    .agent-box.alive { opacity: 1; }
+    .agent-box.pulse .agent-icon { animation: pulse .6s ease-in-out; }
+    @keyframes pulse {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+    .agent-icon {
+      width: 72px; height: 72px; border-radius: 16px;
+      margin: 0 auto 10px; display: flex; align-items: center;
+      justify-content: center; font-size: 28px;
+      border: 2px solid var(--border);
+      transition: border-color .3s, box-shadow .3s;
+    }
+    .agent-icon.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(99,102,241,.4);
+    }
+    .agent-name { font-size: 12px; font-weight: 600; }
+    .agent-port { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .agent-status {
+      margin-top: 6px; font-size: 11px; padding: 2px 8px;
+      border-radius: 99px; display: inline-block;
+    }
+    .status-idle    { background: #1e293b; color: var(--muted); }
+    .status-working { background: #2d1b69; color: #a78bfa; }
+    .status-done    { background: #064e3b; color: var(--green); }
+
+    /* message log */
+    .msg-log {
+      background: #0a0d15; border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px; font-family: monospace;
+      font-size: 12px; height: 180px; overflow-y: auto;
+      line-height: 1.7;
+    }
+    .msg-log .msg-line { display: flex; gap: 8px; align-items: baseline; }
+    .msg-log .ts { color: var(--muted); flex-shrink: 0; }
+    .msg-log .arrow { color: var(--accent2); }
+    .msg-log .content { color: var(--text); }
+
+    /* ── Latency comparison ── */
+    .bar-container { margin: 12px 0; }
+    .bar-label { font-size: 13px; margin-bottom: 6px;
+      display: flex; justify-content: space-between; }
+    .bar-track {
+      height: 28px; background: var(--bg); border-radius: 6px;
+      overflow: hidden; border: 1px solid var(--border);
+    }
+    .bar-fill {
+      height: 100%; border-radius: 6px;
+      display: flex; align-items: center; padding-left: 10px;
+      font-size: 12px; font-weight: 600; color: #fff;
+      transition: width 1.2s cubic-bezier(.4,0,.2,1);
+    }
+    .bar-seq  { background: linear-gradient(90deg, #dc2626, #ef4444); }
+    .bar-par  { background: linear-gradient(90deg, #059669, #10b981); }
+
+    /* ── Code block ── */
+    pre {
+      background: #0a0d15; border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px; font-size: 12px;
+      overflow-x: auto; line-height: 1.7; color: #94a3b8;
+    }
+    pre .kw  { color: #818cf8; }
+    pre .fn  { color: #34d399; }
+    pre .str { color: #fbbf24; }
+    pre .cm  { color: #475569; }
+
+    /* badge */
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 600;
+    }
+    .badge-green { background: #064e3b; color: var(--green); border: 1px solid #065f46; }
+    .badge-blue  { background: #1e3a5f; color: var(--accent2); border: 1px solid #164e63; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media(max-width:700px) { .grid2 { grid-template-columns: 1fr; } }
+
+    .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🤖</span>
+  <div>
+    <h1>Multi-Agent A2A System — Interactive Demo</h1>
+    <p>Day 9 · LangGraph + A2A Protocol · Visualizing Stage 4 & Stage 5 agent interactions</p>
+  </div>
+</header>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('stage4')">📊 Stage 4 — In-Process</div>
+  <div class="tab" onclick="switchTab('stage5')">🌐 Stage 5 — Distributed A2A</div>
+  <div class="tab" onclick="switchTab('latency')">⚡ Latency Benchmark</div>
+  <div class="tab" onclick="switchTab('code')">💻 Code Patterns</div>
+</div>
+
+<!-- ═══════════════ STAGE 4 ═══════════════ -->
+<div id="panel-stage4" class="panel active">
+
+  <div class="card">
+    <h2>📊 Stage 4: Multi-Agent In-Process (LangGraph StateGraph)</h2>
+    <div class="graph-wrap">
+      <svg class="graph" width="780" height="200" viewBox="0 0 780 200">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#6366f1"/>
+          </marker>
+          <marker id="arr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#22d3ee"/>
+          </marker>
+        </defs>
+
+        <!-- START -->
+        <circle cx="40" cy="100" r="18" fill="#6366f1"/>
+        <text x="40" y="105" text-anchor="middle" font-size="11" fill="white" font-weight="bold">START</text>
+
+        <!-- law_agent -->
+        <rect x="80" y="70" width="110" height="60" rx="10" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+        <text x="135" y="96" text-anchor="middle" font-size="13" fill="#a78bfa">⚖️</text>
+        <text x="135" y="112" text-anchor="middle" font-size="12" fill="#e2e8f0">law_agent</text>
+        <text x="135" y="125" text-anchor="middle" font-size="10" fill="#64748b">analyze + route</text>
+
+        <!-- check_routing (conditional) -->
+        <polygon points="230,80 290,100 230,120 170,100" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="230" y="97" text-anchor="middle" font-size="10" fill="#22d3ee">check</text>
+        <text x="230" y="110" text-anchor="middle" font-size="10" fill="#22d3ee">routing</text>
+
+        <!-- tax_agent -->
+        <rect x="320" y="30" width="110" height="56" rx="10" fill="#1a1d27" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="375" y="54" text-anchor="middle" font-size="13">💰</text>
+        <text x="375" y="70" text-anchor="middle" font-size="12" fill="#e2e8f0">tax_agent</text>
+        <text x="375" y="83" text-anchor="middle" font-size="10" fill="#64748b">IRS · penalties</text>
+
+        <!-- compliance_agent -->
+        <rect x="320" y="110" width="110" height="56" rx="10" fill="#1a1d27" stroke="#10b981" stroke-width="1.5"/>
+        <text x="375" y="134" text-anchor="middle" font-size="13">✅</text>
+        <text x="375" y="150" text-anchor="middle" font-size="12" fill="#e2e8f0">compliance_agent</text>
+        <text x="375" y="163" text-anchor="middle" font-size="10" fill="#64748b">SEC · SOX · FCPA</text>
+
+        <!-- privacy_agent -->
+        <rect x="450" y="70" width="110" height="56" rx="10" fill="#1a1d27" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5,3"/>
+        <text x="505" y="94" text-anchor="middle" font-size="13">🔒</text>
+        <text x="505" y="110" text-anchor="middle" font-size="12" fill="#e2e8f0">privacy_agent</text>
+        <text x="505" y="123" text-anchor="middle" font-size="10" fill="#64748b">GDPR · data breach</text>
+
+        <!-- aggregate -->
+        <rect x="590" y="70" width="110" height="60" rx="10" fill="#1a1d27" stroke="#6366f1" stroke-width="1.5"/>
+        <text x="645" y="96" text-anchor="middle" font-size="13">📋</text>
+        <text x="645" y="112" text-anchor="middle" font-size="12" fill="#e2e8f0">aggregate</text>
+        <text x="645" y="125" text-anchor="middle" font-size="10" fill="#64748b">synthesize</text>
+
+        <!-- END -->
+        <circle cx="740" cy="100" r="18" fill="#374151" stroke="#6366f1" stroke-width="2"/>
+        <text x="740" y="105" text-anchor="middle" font-size="11" fill="white" font-weight="bold">END</text>
+
+        <!-- Edges -->
+        <line x1="58" y1="100" x2="78" y2="100" stroke="#6366f1" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="190" y1="100" x2="208" y2="100" stroke="#6366f1" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- routing → tax -->
+        <path d="M250,92 Q290,60 318,58" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <!-- routing → compliance -->
+        <path d="M250,108 Q290,138 318,138" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <!-- routing → privacy (dashed) -->
+        <path d="M252,100 Q380,140 448,98" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr2)"/>
+        <!-- tax → aggregate -->
+        <path d="M430,58 Q520,60 588,90" fill="none" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- compliance → aggregate -->
+        <path d="M430,138 Q520,138 588,110" fill="none" stroke="#10b981" stroke-width="1.5" marker-end="url(#arr)"/>
+        <!-- privacy → aggregate -->
+        <line x1="560" y1="98" x2="588" y2="98" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+        <!-- aggregate → END -->
+        <line x1="700" y1="100" x2="720" y2="100" stroke="#6366f1" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- Send API label -->
+        <text x="280" y="170" text-anchor="middle" font-size="10" fill="#22d3ee">⚡ LangGraph Send API — parallel dispatch</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="dot" style="background:#6366f1"></div> Core flow</div>
+      <div class="legend-item"><div class="dot" style="background:#22d3ee"></div> Parallel dispatch (Send)</div>
+      <div class="legend-item"><div class="dot" style="background:#a78bfa"></div> Conditional (privacy keywords only)</div>
+    </div>
+  </div>
+
+  <!-- Step-by-step -->
+  <div class="card">
+    <h2>🎬 Step-by-step Walkthrough</h2>
+    <div class="ctrl">
+      <button class="btn-primary" onclick="startS4()">▶ Play</button>
+      <button class="btn-secondary" onclick="resetS4()">↺ Reset</button>
+    </div>
+    <div class="steps" id="steps4">
+      <div class="step" data-s4="0">
+        <span class="step-icon">👤</span>
+        <div class="step-body">
+          <h3><span class="tag tag-blue">User</span> Gửi câu hỏi</h3>
+          <p>"Nếu công ty bị rò rỉ dữ liệu khách hàng, hậu quả pháp lý và thuế là gì?"</p>
+        </div>
+      </div>
+      <div class="step" data-s4="1">
+        <span class="step-icon">⚖️</span>
+        <div class="step-body">
+          <h3><span class="tag tag-purple">law_agent</span> Phân tích pháp lý</h3>
+          <p>LLM phân tích câu hỏi: hợp đồng, trách nhiệm dân sự, quyền và nghĩa vụ pháp lý.</p>
+        </div>
+      </div>
+      <div class="step" data-s4="2">
+        <span class="step-icon">🔀</span>
+        <div class="step-body">
+          <h3><span class="tag tag-blue">check_routing</span> Keyword routing</h3>
+          <p>Phát hiện từ khóa <b>"dữ liệu"</b> → dispatch <b>tax_agent</b> + <b>privacy_agent</b> song song qua <code>Send</code> API.</p>
+        </div>
+      </div>
+      <div class="step" data-s4="3">
+        <span class="step-icon">⚡</span>
+        <div class="step-body">
+          <h3>Parallel execution — <span class="tag tag-yellow">tax_agent</span> + <span class="tag tag-purple">privacy_agent</span></h3>
+          <p>Hai agent chạy đồng thời trong cùng process. Latency = max(t_tax, t_privacy) thay vì t_tax + t_privacy.</p>
+        </div>
+      </div>
+      <div class="step" data-s4="4">
+        <span class="step-icon">📋</span>
+        <div class="step-body">
+          <h3><span class="tag tag-green">aggregate_results</span> Tổng hợp</h3>
+          <p>Ghép law_analysis + tax_analysis + privacy_analysis thành báo cáo pháp lý hoàn chỉnh.</p>
+        </div>
+      </div>
+      <div class="step" data-s4="5">
+        <span class="step-icon">✅</span>
+        <div class="step-body">
+          <h3><span class="tag tag-green">Done</span> Trả kết quả về User</h3>
+          <p>Báo cáo tổng hợp gồm: phân tích pháp lý · khía cạnh thuế · vi phạm GDPR & NĐ 13/2023.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ STAGE 5 ═══════════════ -->
+<div id="panel-stage5" class="panel">
+
+  <div class="card">
+    <h2>🌐 Stage 5: Distributed A2A System</h2>
+    <div class="agents-row" id="agents-row">
+      <div class="agent-box alive" id="ag-registry">
+        <div class="agent-icon" id="icon-registry">🗂️</div>
+        <div class="agent-name">Registry</div>
+        <div class="agent-port">:10000</div>
+        <div class="agent-status status-idle" id="status-registry">idle</div>
+      </div>
+      <div class="agent-box alive" id="ag-customer">
+        <div class="agent-icon" id="icon-customer">👤</div>
+        <div class="agent-name">Customer Agent</div>
+        <div class="agent-port">:10100</div>
+        <div class="agent-status status-idle" id="status-customer">idle</div>
+      </div>
+      <div class="agent-box alive" id="ag-law">
+        <div class="agent-icon" id="icon-law">⚖️</div>
+        <div class="agent-name">Law Agent</div>
+        <div class="agent-port">:10101</div>
+        <div class="agent-status status-idle" id="status-law">idle</div>
+      </div>
+      <div class="agent-box alive" id="ag-tax">
+        <div class="agent-icon" id="icon-tax">💰</div>
+        <div class="agent-name">Tax Agent</div>
+        <div class="agent-port">:10102</div>
+        <div class="agent-status status-idle" id="status-tax">idle</div>
+      </div>
+      <div class="agent-box alive" id="ag-comp">
+        <div class="agent-icon" id="icon-comp">✅</div>
+        <div class="agent-name">Compliance Agent</div>
+        <div class="agent-port">:10103</div>
+        <div class="agent-status status-idle" id="status-comp">idle</div>
+      </div>
+    </div>
+
+    <!-- Message log -->
+    <div class="msg-log" id="msg-log">
+      <div class="msg-line"><span class="ts">--:--:--</span><span class="content" style="color:#64748b">▸ Press Play to simulate a request…</span></div>
+    </div>
+
+    <div class="ctrl" style="margin-top:16px">
+      <button class="btn-primary" onclick="startS5()">▶ Play simulation</button>
+      <button class="btn-secondary" onclick="resetS5()">↺ Reset</button>
+    </div>
+  </div>
+
+  <!-- Architecture note -->
+  <div class="grid2">
+    <div class="card">
+      <h2>📐 Key Design Patterns</h2>
+      <div class="steps" style="gap:8px">
+        <div class="step done">
+          <span class="step-icon">🔍</span>
+          <div class="step-body">
+            <h3>Dynamic Discovery</h3>
+            <p>Agents không hardcode URL. Tìm nhau qua Registry <code>/discover/{'{task}'}</code>.</p>
+          </div>
+        </div>
+        <div class="step done">
+          <span class="step-icon">⚡</span>
+          <div class="step-body">
+            <h3>Parallel Delegation</h3>
+            <p>Law Agent dispatch Tax + Compliance song song qua LangGraph <code>Send</code> API.</p>
+          </div>
+        </div>
+        <div class="step done">
+          <span class="step-icon">🔗</span>
+          <div class="step-body">
+            <h3>Trace Propagation</h3>
+            <p><code>trace_id</code> và <code>context_id</code> truyền qua mọi A2A hop để debug.</p>
+          </div>
+        </div>
+        <div class="step done">
+          <span class="step-icon">🛡️</span>
+          <div class="step-body">
+            <h3>Depth Guards</h3>
+            <p><code>MAX_DELEGATION_DEPTH = 3</code> ngăn vòng lặp delegation vô hạn.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>⚖️ Stage 4 vs Stage 5</h2>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <tr style="color:var(--muted)">
+          <th style="text-align:left;padding:6px 4px">Tiêu chí</th>
+          <th style="text-align:center;padding:6px 4px">Stage 4</th>
+          <th style="text-align:center;padding:6px 4px">Stage 5</th>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:8px 4px">Deployment</td>
+          <td style="text-align:center">1 process</td>
+          <td style="text-align:center">5 services</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:8px 4px">Giao tiếp</td>
+          <td style="text-align:center">Function call</td>
+          <td style="text-align:center">HTTP / A2A</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:8px 4px">Scale</td>
+          <td style="text-align:center">Monolith</td>
+          <td style="text-align:center">Độc lập</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:8px 4px">Fault isolation</td>
+          <td style="text-align:center">❌</td>
+          <td style="text-align:center">✅</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:8px 4px">Debug</td>
+          <td style="text-align:center">Dễ</td>
+          <td style="text-align:center">trace_id</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:8px 4px">Phù hợp</td>
+          <td style="text-align:center">Prototype</td>
+          <td style="text-align:center">Production</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ LATENCY ═══════════════ -->
+<div id="panel-latency" class="panel">
+  <div class="card">
+    <h2>⚡ Latency Benchmark — Sequential vs Parallel Delegation</h2>
+
+    <div class="grid2">
+      <div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+          Kết quả thực đo trên Tax Agent + Compliance Agent qua A2A protocol thật (model <code>openai/gpt-oss-120b:free</code>).
+        </p>
+        <div class="bar-container">
+          <div class="bar-label">
+            <span>🐌 Sequential (tuần tự)</span>
+            <span style="color:var(--red);font-weight:700" id="seq-val">267.21s</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-seq" id="bar-seq" style="width:0%">t_tax + t_compliance</div>
+          </div>
+        </div>
+        <div class="bar-container" style="margin-top:16px">
+          <div class="bar-label">
+            <span>⚡ Parallel (song song)</span>
+            <span style="color:var(--green);font-weight:700" id="par-val">119.20s</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-par" id="bar-par" style="width:0%">max(t_tax, t_compliance)</div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:16px;background:var(--bg);border-radius:10px;border:1px solid #065f46">
+          <div style="font-size:24px;font-weight:800;color:var(--green)">−55.4%</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px">Giảm 148s bằng cách chạy song song</div>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn-success" onclick="animateBars()">▶ Animate</button>
+        </div>
+      </div>
+
+      <div>
+        <p style="font-size:13px;font-weight:600;margin-bottom:12px">Timeline visualization</p>
+        <svg width="100%" height="120" viewBox="0 0 400 120" id="timeline-svg">
+          <text x="10" y="18" font-size="11" fill="#64748b">BEFORE</text>
+          <!-- seq tax -->
+          <rect id="tl-seq-tax" x="80" y="6" width="0" height="20" rx="4" fill="#ef4444"/>
+          <text x="82" y="21" font-size="10" fill="white">tax</text>
+          <!-- seq comp -->
+          <rect id="tl-seq-comp" x="80" y="6" width="0" height="20" rx="4" fill="#dc2626" opacity="0"/>
+          <text id="tl-seq-comp-lbl" x="0" y="21" font-size="10" fill="white" opacity="0">compliance</text>
+
+          <text x="10" y="70" font-size="11" fill="#64748b">AFTER</text>
+          <!-- par tax -->
+          <rect id="tl-par-tax" x="80" y="56" width="0" height="20" rx="4" fill="#10b981"/>
+          <text x="82" y="71" font-size="10" fill="white">tax</text>
+          <!-- par comp -->
+          <rect id="tl-par-comp" x="80" y="80" width="0" height="20" rx="4" fill="#059669"/>
+          <text x="82" y="95" font-size="10" fill="white">compliance</text>
+
+          <line x1="80" y1="100" x2="380" y2="100" stroke="#2a2d3e" stroke-width="1"/>
+          <text x="80" y="115" font-size="10" fill="#475569">0s</text>
+          <text x="230" y="115" font-size="10" fill="#475569" text-anchor="middle">time →</text>
+          <text x="380" y="115" font-size="10" fill="#475569" text-anchor="end">~270s</text>
+        </svg>
+
+        <div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7">
+          <b style="color:var(--text)">Lý giải:</b> Tax và Compliance agent không phụ thuộc nhau —
+          cả hai chỉ cần câu hỏi gốc đã có sẵn. Dispatch song song giảm latency từ
+          <code>t₁+t₂</code> xuống <code>max(t₁,t₂)</code>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📊 Phân tích latency từng bước (Stage 5 thực tế)</h2>
+    <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr style="color:var(--muted);background:var(--bg)">
+          <th style="text-align:left;padding:10px">Bước</th>
+          <th style="text-align:center;padding:10px">Model free<br>(openai/gpt-oss-120b)</th>
+          <th style="text-align:center;padding:10px">Model thương mại<br>(Claude Sonnet)</th>
+          <th style="text-align:center;padding:10px">Trên critical path?</th>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:10px">analyze_law (LLM call)</td>
+          <td style="text-align:center">30–90s</td><td style="text-align:center">2–5s</td>
+          <td style="text-align:center">✅ Có</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border);background:#0a0d15">
+          <td style="padding:10px">check_routing (LLM call)</td>
+          <td style="text-align:center">30–90s</td><td style="text-align:center">1–3s</td>
+          <td style="text-align:center">✅ Có</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:10px">call_tax + call_compliance <b>song song</b></td>
+          <td style="text-align:center;color:var(--green)">119s</td><td style="text-align:center;color:var(--green)">5–15s</td>
+          <td style="text-align:center">✅ Có (parallel)</td>
+        </tr>
+        <tr style="border-top:1px solid var(--border);background:#0a0d15">
+          <td style="padding:10px">aggregate (LLM call)</td>
+          <td style="text-align:center">30–60s</td><td style="text-align:center">2–5s</td>
+          <td style="text-align:center">✅ Có</td>
+        </tr>
+        <tr style="border-top:2px solid var(--accent);font-weight:700">
+          <td style="padding:10px">Tổng latency</td>
+          <td style="text-align:center;color:var(--red)">~267s</td>
+          <td style="text-align:center;color:var(--green)">~30–60s</td>
+          <td style="text-align:center">—</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ CODE ═══════════════ -->
+<div id="panel-code" class="panel">
+  <div class="grid2">
+    <div class="card">
+      <h2>⚡ Parallel Delegation (Stage 4/5)</h2>
+      <pre><span class="cm"># LangGraph Send API — dispatch song song</span>
+<span class="kw">def</span> <span class="fn">check_routing</span>(state: State) -> list[Send]:
+    tasks = []
+    <span class="kw">if</span> <span class="str">"thuế"</span> in question:
+        tasks.append(Send(<span class="str">"tax_agent"</span>, state))
+    <span class="kw">if</span> <span class="str">"dữ liệu"</span> in question:
+        tasks.append(Send(<span class="str">"privacy_agent"</span>, state))
+    <span class="kw">return</span> tasks  <span class="cm"># chạy song song!</span>
+
+<span class="cm"># asyncio.gather — tương đương Send API</span>
+tax, comp = <span class="kw">await</span> asyncio.gather(
+    call_tax(ctx, trace),
+    call_compliance(ctx, trace),
+)
+<span class="cm"># latency = max(t_tax, t_compliance) ✅</span></pre>
+    </div>
+    <div class="card">
+      <h2>🔧 Function Calling (Stage 2)</h2>
+      <pre><span class="kw">from</span> langchain_core.tools <span class="kw">import</span> tool
+
+<span class="kw">@</span><span class="fn">tool</span>
+<span class="kw">def</span> <span class="fn">check_statute_of_limitations</span>(
+    case_type: str
+) -> str:
+    <span class="str">"""Kiểm tra thời hiệu khởi kiện."""</span>
+    limits = {
+        <span class="str">"contract"</span>: <span class="str">"4 năm (UCC § 2-725)"</span>,
+        <span class="str">"tort"</span>: <span class="str">"2-3 năm tùy bang"</span>,
+        <span class="str">"property"</span>: <span class="str">"5 năm"</span>,
+    }
+    <span class="kw">return</span> limits.get(case_type.lower())
+
+<span class="cm"># LLM tự quyết định khi nào gọi tool</span>
+llm_with_tools = llm.bind_tools([
+    search_legal_knowledge,
+    check_statute_of_limitations,
+])</pre>
+    </div>
+    <div class="card">
+      <h2>🌐 A2A Delegate (Stage 5)</h2>
+      <pre><span class="kw">async def</span> <span class="fn">delegate</span>(endpoint, question,
+                   context_id, trace_id, depth):
+    <span class="kw">async with</span> httpx.AsyncClient(
+        timeout=<span class="str">300.0</span>
+    ) <span class="kw">as</span> client:
+        card = AgentCard.model_validate(
+            (<span class="kw">await</span> client.get(
+                f<span class="str">"{endpoint}/.well-known/agent.json"</span>
+            )).json()
+        )
+        a2a = A2AClient(
+            httpx_client=client,
+            agent_card=card
+        )
+        response = <span class="kw">await</span> a2a.send_message(
+            build_request(question, trace_id)
+        )
+        <span class="kw">return</span> extract_text(response)</pre>
+    </div>
+    <div class="card">
+      <h2>📊 LangGraph StateGraph (Stage 4)</h2>
+      <pre><span class="kw">class</span> <span class="fn">State</span>(TypedDict):
+    question: str
+    law_analysis: Annotated[str, _last_wins]
+    tax_analysis: Annotated[str, _last_wins]
+    privacy_analysis: Annotated[str, _last_wins]
+    final_response: str
+
+graph = StateGraph(State)
+graph.add_node(<span class="str">"law_agent"</span>, law_agent)
+graph.add_node(<span class="str">"tax_agent"</span>, tax_agent)
+graph.add_node(<span class="str">"privacy_agent"</span>, privacy_agent)
+graph.add_node(<span class="str">"aggregate_results"</span>, aggregate)
+
+graph.add_conditional_edges(
+    <span class="str">"law_agent"</span>, check_routing,
+    [<span class="str">"tax_agent"</span>, <span class="str">"privacy_agent"</span>, <span class="str">"aggregate_results"</span>],
+)</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Tab switching ── */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['stage4','stage5','latency','code'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'latency') setTimeout(animateBars, 300);
+}
+
+/* ── Stage 4 walkthrough ── */
+let s4Timer = null, s4Step = -1;
+const S4_DELAY = 1400;
+
+function resetS4() {
+  clearTimeout(s4Timer); s4Step = -1;
+  document.querySelectorAll('#steps4 .step').forEach(s => {
+    s.classList.remove('active','done');
+  });
+}
+
+function startS4() {
+  resetS4();
+  advanceS4();
+}
+
+function advanceS4() {
+  const steps = document.querySelectorAll('#steps4 .step');
+  if (s4Step >= 0 && s4Step < steps.length)
+    steps[s4Step].classList.replace('active','done');
+  s4Step++;
+  if (s4Step >= steps.length) return;
+  steps[s4Step].classList.add('active');
+  s4Timer = setTimeout(advanceS4, S4_DELAY);
+}
+
+/* ── Stage 5 simulation ── */
+const S5_MSGS = [
+  { delay: 0,    agents: ['customer'], msg: '👤 User → Customer Agent: "If a company breaks a contract and avoids taxes…"' },
+  { delay: 800,  agents: ['customer','registry'], msg: '🔍 Customer Agent → Registry: GET /discover/legal_question' },
+  { delay: 1600, agents: ['registry'], msg: '📋 Registry → Customer Agent: { endpoint: "http://localhost:10101" }' },
+  { delay: 2400, agents: ['customer','law'], msg: '📨 Customer Agent → Law Agent (A2A): SendMessageRequest' },
+  { delay: 3400, agents: ['law'], msg: '⚖️  Law Agent: [analyze_law] LLM analyzing contract/tort aspects…' },
+  { delay: 5000, agents: ['law'], msg: '🔀 Law Agent: [check_routing] needs_tax=true, needs_compliance=true' },
+  { delay: 5800, agents: ['law','registry'], msg: '🔍 Law Agent → Registry: GET /discover/tax_question & compliance_question' },
+  { delay: 6600, agents: ['law','tax','comp'], msg: '⚡ Law Agent: dispatching Tax + Compliance IN PARALLEL (Send API)' },
+  { delay: 7400, agents: ['tax'], msg: '💰 Tax Agent: analyzing IRS, tax evasion, §7201, FBAR/FATCA…' },
+  { delay: 7400, agents: ['comp'], msg: '✅ Compliance Agent: analyzing SEC, SOX, FCPA, AML violations…' },
+  { delay: 9200, agents: ['law'], msg: '📊 Law Agent: both specialists returned — running [aggregate]' },
+  { delay: 10400,agents: ['law'], msg: '📨 Law Agent → Customer Agent: comprehensive legal analysis' },
+  { delay: 11200,agents: ['customer'], msg: '✅ Customer Agent → User: final response delivered' },
+];
+
+let s5Timers = [];
+function resetS5() {
+  s5Timers.forEach(clearTimeout); s5Timers = [];
+  ['registry','customer','law','tax','comp'].forEach(id => {
+    document.getElementById('icon-'+id).classList.remove('active');
+    document.getElementById('ag-'+id).classList.remove('pulse');
+    setStatus(id, 'idle');
+  });
+  document.getElementById('msg-log').innerHTML =
+    '<div class="msg-line"><span class="ts">--:--:--</span><span class="content" style="color:#64748b">▸ Press Play to simulate a request…</span></div>';
+}
+
+function setStatus(id, state) {
+  const el = document.getElementById('status-'+id);
+  el.className = 'agent-status status-'+state;
+  el.textContent = state;
+}
+
+function log(text) {
+  const log = document.getElementById('msg-log');
+  const now = new Date().toLocaleTimeString('vi-VN',{hour12:false});
+  log.innerHTML += `<div class="msg-line"><span class="ts">${now}</span><span class="arrow"> ▸ </span><span class="content">${text}</span></div>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+function startS5() {
+  resetS5();
+  const workingMap = {
+    customer: ['customer'],
+    registry: ['registry'],
+    law: ['law'],
+    tax: ['tax'],
+    comp: ['comp'],
+  };
+
+  S5_MSGS.forEach(({delay, agents, msg}) => {
+    s5Timers.push(setTimeout(() => {
+      agents.forEach(id => {
+        document.getElementById('icon-'+id).classList.add('active');
+        const box = document.getElementById('ag-'+id);
+        box.classList.add('pulse');
+        setTimeout(() => box.classList.remove('pulse'), 700);
+        setStatus(id, id === 'registry' ? 'working' : 'working');
+      });
+      log(msg);
+    }, delay));
+  });
+
+  // Mark done at end
+  s5Timers.push(setTimeout(() => {
+    ['registry','customer','law','tax','comp'].forEach(id => {
+      document.getElementById('icon-'+id).classList.remove('active');
+      setStatus(id, 'done');
+    });
+  }, 12000));
+}
+
+/* ── Latency bars ── */
+function animateBars() {
+  const seq = document.getElementById('bar-seq');
+  const par = document.getElementById('bar-par');
+  seq.style.width = '0%'; par.style.width = '0%';
+  setTimeout(() => { seq.style.width = '100%'; }, 100);
+  setTimeout(() => { par.style.width = '44.6%'; }, 400);
+
+  // Timeline SVG
+  const W = 300; // total width mapped to 267s
+  const tseq_tax = W * 0.5;    // ~134s for tax sequential
+  const tseq_comp = W * 0.5;   // ~133s for compliance sequential
+  const tpar = W * 0.446;      // 119s parallel
+
+  animRect('tl-seq-tax', 80, tseq_tax, 300);
+  setTimeout(() => {
+    animRect('tl-seq-comp', 80 + tseq_tax, tseq_comp, 300);
+    document.getElementById('tl-seq-comp').setAttribute('opacity','1');
+    const lbl = document.getElementById('tl-seq-comp-lbl');
+    lbl.setAttribute('x', 80 + tseq_tax + 2);
+    lbl.setAttribute('opacity','1');
+  }, 800);
+  animRect('tl-par-tax', 80, tpar, 600);
+  animRect('tl-par-comp', 80, tpar, 600);
+}
+
+function animRect(id, x, targetW, dur) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.setAttribute('width', 0);
+  let start = null;
+  function step(ts) {
+    if (!start) start = ts;
+    const p = Math.min((ts - start) / dur, 1);
+    el.setAttribute('width', p * targetW);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// Auto-animate bars when latency tab is visible
+setTimeout(animateBars, 500);
+</script>
+</body>
+</html>
